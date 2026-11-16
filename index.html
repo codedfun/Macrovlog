@@ -74,7 +74,16 @@ header.top h1{font-size:26px;text-transform:uppercase;letter-spacing:.04em}
 .tip{font-size:13.5px;background:var(--sunk);border-radius:10px;padding:10px 12px}
 .tip b{color:var(--pro)}
 
-.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.actions .btn{padding:12px 8px;font-size:14px;flex-wrap:wrap;line-height:1.2}
+.bar{display:flex;flex-direction:column;gap:10px;background:var(--sunk);border-radius:12px;padding:12px}
+.bar .row{display:flex;flex-direction:column;gap:8px}
+.bar .row .inline input{flex:1}
+.bar .row .inline .btn{flex:none}
+.results .meta{color:var(--muted);font-size:12.5px;white-space:nowrap;text-align:right}
+.results .nm{min-width:0;display:flex;flex-direction:column}
+.results .nm small{color:var(--muted);font-size:12px}
+.tag{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-align:center}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .btn.ghost{background:transparent}
@@ -184,6 +193,8 @@ textarea{resize:vertical;min-height:62px}
 
 <input type="file" id="camIn" accept="image/*" capture="environment" hidden>
 <input type="file" id="libIn" accept="image/*" hidden>
+<input type="file" id="barIn" accept="image/*" capture="environment" hidden>
+<input type="file" id="labelIn" accept="image/*" capture="environment" hidden>
 
 <script>
 (() => {
@@ -200,55 +211,147 @@ const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate(
 const dateOf = k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-/* Per 100 g, from USDA FoodData Central reference values (cooked weight where noted). */
+/* Per 100 g, rounded from USDA FoodData Central (cooked weight where noted). [name, protein, carbs, fat, serving g, serving label, extra search words] */
 const FOODS = [
-  ["Chicken breast, cooked", 31, 0, 3.6, 150, "1 breast ≈ 150 g"],
-  ["Chicken thigh, cooked, skinless", 26, 0, 8.2, 100, "1 thigh ≈ 100 g"],
-  ["Ground beef 90/10, cooked", 26.1, 0, 11.7, 113, "4 oz cooked"],
-  ["Sirloin steak, lean, cooked", 30, 0, 6, 170, "6 oz cooked"],
-  ["Ground turkey 93/7, cooked", 27.1, 0, 9.9, 113, "4 oz cooked"],
-  ["Pork tenderloin, cooked", 26.2, 0, 3.5, 113, "4 oz cooked"],
-  ["Salmon, cooked", 22.1, 0, 12.4, 140, "1 fillet ≈ 140 g"],
-  ["Tuna, canned in water, drained", 23.6, 0, 0.9, 113, "1 can drained"],
-  ["Shrimp, cooked", 24, 0.2, 0.3, 100, "≈ 12 large"],
-  ["Egg, whole", 12.6, 0.7, 9.5, 50, "1 large egg = 50 g"],
-  ["Egg whites", 10.9, 0.7, 0.2, 243, "1 cup"],
-  ["Greek yogurt, nonfat plain", 10.3, 3.6, 0.4, 170, "1 container"],
-  ["Cottage cheese, 2%", 10.5, 4.8, 2.3, 113, "½ cup"],
-  ["Milk, 2%", 3.3, 4.8, 2, 244, "1 cup"],
-  ["Whey protein powder", 78, 8, 5, 31, "1 scoop ≈ 31 g"],
-  ["Tofu, firm", 17.3, 2.8, 8.7, 126, "½ cup"],
-  ["Cheddar cheese", 24.9, 1.3, 33.1, 28, "1 oz"],
-  ["White rice, cooked", 2.7, 28.2, 0.3, 158, "1 cup"],
-  ["Brown rice, cooked", 2.6, 23, 0.9, 195, "1 cup"],
-  ["Rolled oats, dry", 13.2, 67.7, 6.5, 40, "½ cup dry"],
-  ["Pasta, cooked", 5.8, 30.9, 0.9, 140, "1 cup"],
-  ["Quinoa, cooked", 4.4, 21.3, 1.9, 185, "1 cup"],
-  ["Potato, baked with skin", 2.5, 21.2, 0.1, 173, "1 medium"],
-  ["Sweet potato, baked", 2, 20.7, 0.2, 114, "1 medium"],
-  ["Whole wheat bread", 12.3, 43.1, 3.5, 32, "1 slice"],
-  ["Tortilla, flour", 8.3, 49.4, 7.8, 45, "1 medium (8 in)"],
-  ["Black beans, cooked", 8.9, 23.7, 0.5, 172, "1 cup"],
-  ["Lentils, cooked", 9, 20.1, 0.4, 198, "1 cup"],
+  // Fruit
+  ["Mango", 0.8, 15, 0.4, 165, "1 cup pieces"],
   ["Banana", 1.1, 22.8, 0.3, 118, "1 medium"],
   ["Apple", 0.3, 13.8, 0.2, 182, "1 medium"],
-  ["Blueberries", 0.7, 14.5, 0.3, 148, "1 cup"],
+  ["Orange", 0.9, 11.8, 0.1, 131, "1 medium"],
+  ["Pineapple", 0.5, 13.1, 0.1, 165, "1 cup chunks"],
+  ["Grapes", 0.7, 18.1, 0.2, 151, "1 cup"],
   ["Strawberries", 0.7, 7.7, 0.3, 152, "1 cup"],
+  ["Blueberries", 0.7, 14.5, 0.3, 148, "1 cup"],
+  ["Raspberries", 1.2, 11.9, 0.7, 123, "1 cup"],
+  ["Blackberries", 1.4, 9.6, 0.5, 144, "1 cup"],
+  ["Watermelon", 0.6, 7.6, 0.2, 152, "1 cup diced"],
+  ["Cantaloupe", 0.8, 8.2, 0.2, 160, "1 cup diced", "melon"],
+  ["Peach", 0.9, 9.5, 0.3, 150, "1 medium"],
+  ["Pear", 0.4, 15.2, 0.1, 178, "1 medium"],
+  ["Kiwi", 1.1, 14.7, 0.5, 69, "1 fruit", "kiwifruit"],
+  ["Cherries", 1.1, 16, 0.2, 138, "1 cup"],
+  ["Papaya", 0.5, 10.8, 0.3, 145, "1 cup pieces"],
+  ["Plum", 0.7, 11.4, 0.3, 66, "1 fruit"],
+  ["Grapefruit", 0.8, 10.7, 0.1, 123, "½ fruit"],
+  ["Pomegranate seeds", 1.7, 18.7, 1.2, 87, "½ cup", "arils"],
+  ["Dates, Medjool", 1.8, 75, 0.2, 24, "1 date"],
+  ["Raisins", 3.1, 79.2, 0.5, 40, "¼ cup"],
+  ["Avocado", 2, 8.5, 14.7, 150, "1 medium avocado"],
+  // Vegetables
+  ["Broccoli, raw", 2.8, 6.6, 0.4, 91, "1 cup chopped"],
   ["Broccoli, cooked", 2.4, 7.2, 0.4, 156, "1 cup"],
   ["Spinach, raw", 2.9, 3.6, 0.4, 30, "1 cup"],
+  ["Spinach, cooked", 3, 3.8, 0.3, 180, "1 cup"],
+  ["Kale, raw", 2.9, 4.4, 1.5, 21, "1 cup"],
+  ["Romaine lettuce", 1.2, 3.3, 0.3, 47, "1 cup shredded", "salad"],
+  ["Carrot", 0.9, 9.6, 0.2, 61, "1 medium", "carrots"],
+  ["Bell pepper", 1, 6, 0.3, 119, "1 medium", "red green"],
+  ["Tomato", 0.9, 3.9, 0.2, 123, "1 medium", "tomatoes"],
+  ["Cucumber", 0.7, 3.6, 0.1, 100, "⅓ cucumber"],
+  ["Onion", 1.1, 9.3, 0.1, 110, "1 medium"],
+  ["Mushrooms", 3.1, 3.3, 0.3, 70, "1 cup sliced"],
+  ["Zucchini", 1.2, 3.1, 0.3, 124, "1 cup sliced", "courgette"],
+  ["Cauliflower", 1.9, 5, 0.3, 107, "1 cup"],
+  ["Green beans, cooked", 1.9, 7.9, 0.3, 125, "1 cup"],
+  ["Asparagus, cooked", 2.4, 4.1, 0.2, 90, "6 spears"],
+  ["Brussels sprouts, cooked", 2.6, 7.1, 0.5, 156, "1 cup"],
+  ["Sweet corn, cooked", 3.4, 21, 1.5, 145, "1 cup kernels"],
+  ["Green peas, cooked", 5.4, 15.6, 0.2, 160, "1 cup"],
+  ["Edamame", 11.9, 8.9, 5.2, 155, "1 cup shelled"],
   ["Mixed vegetables, cooked", 2.6, 13.1, 0.2, 182, "1 cup"],
-  ["Avocado", 2, 8.5, 14.7, 68, "½ avocado"],
-  ["Olive oil", 0, 0, 100, 13.5, "1 tbsp"],
+  ["Potato, baked with skin", 2.5, 21.2, 0.1, 173, "1 medium", "potatoes"],
+  ["Sweet potato, baked", 2, 20.7, 0.2, 114, "1 medium", "yam"],
+  ["French fries", 3.4, 41.4, 14.7, 117, "1 medium order", "chips"],
+  // Meat, fish, eggs
+  ["Chicken breast, cooked", 31, 0, 3.6, 150, "1 breast"],
+  ["Chicken thigh, skinless, cooked", 24.8, 0, 8.2, 100, "1 thigh"],
+  ["Chicken wings, cooked", 27.2, 0, 19.3, 32, "1 wing"],
+  ["Ground beef 80/20, cooked", 25.9, 0, 17.6, 85, "3 oz", "mince hamburger"],
+  ["Ground beef 90/10, cooked", 26.1, 0, 11.7, 85, "3 oz", "mince lean"],
+  ["Sirloin steak, cooked", 30, 0, 6, 170, "6 oz", "beef"],
+  ["Ribeye steak, cooked", 24, 0, 20, 170, "6 oz", "beef"],
+  ["Ground turkey 93/7, cooked", 27.1, 0, 9.9, 85, "3 oz"],
+  ["Pork tenderloin, cooked", 26.2, 0, 3.5, 85, "3 oz"],
+  ["Pork chop, cooked", 27, 0, 8, 145, "1 chop"],
+  ["Bacon, cooked", 37, 1.4, 42, 8, "1 slice"],
+  ["Beef jerky", 33.2, 11, 25.6, 28, "1 oz"],
+  ["Salmon, cooked", 22.1, 0, 12.4, 140, "1 fillet", "fish"],
+  ["Cod, cooked", 22.8, 0, 0.9, 140, "1 fillet", "fish white"],
+  ["Tilapia, cooked", 26.2, 0, 2.7, 87, "1 fillet", "fish"],
+  ["Tuna, canned in water", 23.6, 0, 0.9, 113, "1 can drained", "fish"],
+  ["Shrimp, cooked", 24, 0.2, 0.3, 85, "3 oz", "prawns"],
+  ["Egg", 12.6, 0.7, 9.5, 50, "1 large", "eggs whole"],
+  ["Egg whites", 10.9, 0.7, 0.2, 33, "1 large egg white"],
+  ["Tofu, firm", 17.3, 2.8, 8.7, 126, "½ cup"],
+  ["Tempeh", 20.3, 7.6, 10.8, 84, "½ cup"],
+  // Dairy
+  ["Greek yogurt, nonfat plain", 10.3, 3.6, 0.4, 170, "1 container", "yoghurt"],
+  ["Greek yogurt, 2% plain", 9.9, 3.9, 1.9, 170, "1 container", "yoghurt"],
+  ["Yogurt, low-fat plain", 5.3, 7, 1.6, 170, "1 container", "yoghurt"],
+  ["Cottage cheese, 2%", 10.5, 4.8, 2.3, 113, "½ cup"],
+  ["Milk, whole", 3.2, 4.8, 3.3, 244, "1 cup"],
+  ["Milk, 2%", 3.3, 4.8, 2, 244, "1 cup"],
+  ["Milk, skim", 3.4, 5, 0.1, 245, "1 cup", "nonfat"],
+  ["Cheddar cheese", 24.9, 1.3, 33.1, 28, "1 oz"],
+  ["Mozzarella, part-skim", 24, 3, 16, 28, "1 oz", "cheese"],
+  ["Parmesan", 35.8, 3.2, 25.8, 5, "1 tbsp grated", "cheese"],
+  ["Feta", 14.2, 3.9, 21.3, 28, "1 oz", "cheese"],
+  ["Cream cheese", 6.2, 4.1, 34.4, 29, "2 tbsp"],
   ["Butter", 0.9, 0.1, 81.1, 14, "1 tbsp"],
-  ["Peanut butter", 22.5, 22.3, 51.4, 32, "2 tbsp"],
-  ["Almonds", 21.2, 21.6, 49.9, 28, "1 oz ≈ 23 nuts"],
+  ["Ice cream, vanilla", 3.5, 23.6, 11, 66, "½ cup"],
+  ["Whey protein powder", 78, 8, 5, 31, "1 scoop (check your label)", "shake"],
+  // Grains and starches
+  ["White rice, cooked", 2.7, 28.2, 0.3, 158, "1 cup", "jasmine basmati"],
+  ["Brown rice, cooked", 2.6, 23, 0.9, 195, "1 cup"],
+  ["Rolled oats, dry", 13.2, 67.7, 6.5, 40, "½ cup dry", "oatmeal porridge"],
+  ["Oatmeal, cooked with water", 2.5, 12, 1.5, 234, "1 cup", "porridge"],
+  ["Pasta, cooked", 5.8, 30.9, 0.9, 140, "1 cup", "spaghetti noodles"],
+  ["Quinoa, cooked", 4.4, 21.3, 1.9, 185, "1 cup"],
+  ["Couscous, cooked", 3.8, 23.2, 0.2, 157, "1 cup"],
+  ["White bread", 9, 49, 3.2, 28, "1 slice", "toast"],
+  ["Whole wheat bread", 12.3, 43.1, 3.5, 32, "1 slice", "toast"],
+  ["Bagel, plain", 10.1, 53, 1.7, 98, "1 bagel"],
+  ["Pita, white", 9.1, 55.7, 1.2, 60, "1 pita"],
+  ["Tortilla, flour", 8.3, 49.4, 7.8, 45, "1 medium (8 in)", "wrap"],
+  ["Tortilla, corn", 5.7, 44.6, 2.9, 26, "1 small"],
+  ["Rice cakes", 8.2, 81.5, 2.8, 9, "1 cake"],
+  ["Popcorn, air-popped", 12.9, 77.8, 4.5, 8, "1 cup"],
+  ["Pizza, cheese", 11, 33, 10.5, 107, "1 slice (14 in)"],
+  // Beans
+  ["Black beans, cooked", 8.9, 23.7, 0.5, 172, "1 cup"],
+  ["Chickpeas, cooked", 8.9, 27.4, 2.6, 164, "1 cup", "garbanzo"],
+  ["Kidney beans, cooked", 8.7, 22.8, 0.5, 177, "1 cup"],
+  ["Pinto beans, cooked", 9, 26.2, 0.7, 171, "1 cup"],
+  ["Lentils, cooked", 9, 20.1, 0.4, 198, "1 cup"],
   ["Hummus", 7.9, 14.3, 9.6, 30, "2 tbsp"],
+  // Nuts, seeds, fats
+  ["Almonds", 21.2, 21.6, 49.9, 28, "1 oz (23 nuts)"],
+  ["Peanuts, dry-roasted", 24.4, 21.3, 49.7, 28, "1 oz"],
+  ["Walnuts", 15.2, 13.7, 65.2, 28, "1 oz"],
+  ["Cashews", 18.2, 30.2, 43.8, 28, "1 oz"],
+  ["Pistachios", 20.2, 27.2, 45.3, 28, "1 oz"],
+  ["Peanut butter", 22.5, 22.3, 51.4, 32, "2 tbsp"],
+  ["Almond butter", 21, 18.8, 55.5, 32, "2 tbsp"],
+  ["Chia seeds", 16.5, 42.1, 30.7, 12, "1 tbsp"],
+  ["Flaxseed, ground", 18.3, 28.9, 42.2, 7, "1 tbsp"],
+  ["Olive oil", 0, 0, 100, 13.5, "1 tbsp", "oil"],
+  ["Avocado oil", 0, 0, 100, 14, "1 tbsp", "oil"],
+  ["Coconut oil", 0, 0, 100, 13.6, "1 tbsp", "oil"],
+  ["Mayonnaise", 1, 0.6, 74.9, 14, "1 tbsp", "mayo"],
+  ["Dark chocolate, 70–85%", 7.8, 45.9, 42.6, 28, "1 oz", "chocolate"],
+  // Sweeteners, drinks, sauces
+  ["Honey", 0.3, 82.4, 0, 21, "1 tbsp"],
+  ["Maple syrup", 0, 67, 0.1, 20, "1 tbsp"],
+  ["Sugar", 0, 100, 0, 4, "1 tsp"],
+  ["Ketchup", 1, 25.8, 0.1, 17, "1 tbsp"],
+  ["Orange juice", 0.7, 10.4, 0.2, 248, "1 cup", "oj"],
+  ["Cola (regular)", 0, 10.6, 0, 355, "1 can (355 ml)", "soda coke"],
 ];
 
 const state = {
   view: "today", dayKey: keyOf(new Date()), settings: undefined, weights: [], day: null,
   loaded: { settings: false, day: false }, remote: false, sample: null, sampleImages: false,
-  editor: null, draft: null,
+  editor: null, draft: null, myFoods: [],
 };
 const photoCache = {};
 
@@ -316,6 +419,7 @@ async function init() {
     if (!v && state.view === "today" && !state.draft) state.view = "targets";
     render();
   });
+  backend.sub("foods", v => { state.myFoods = v?.list || []; });
   backend.sub("weights", v => { state.weights = (v?.list || []).slice().sort((a, b) => a.d < b.d ? -1 : 1); render(); });
   subDay();
 }
@@ -352,7 +456,8 @@ function dayTotals(day) {
 }
 
 const ICON_CAM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
-const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+const ICON_BAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6v12M7 6v12M11 6v12M14 6v12M17 6v12M20 6v12"/></svg>';
+const ICON_PLUS ='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
 
 function renderToday() {
   const v = $("#view");
@@ -400,7 +505,8 @@ function renderToday() {
     ${tip}
   </section>
   <div class="actions">
-    <label class="btn primary" for="camIn" id="quickPhoto">${ICON_CAM}Snap a meal</label>
+    <label class="btn primary" for="camIn" id="quickPhoto">${ICON_CAM}Snap meal</label>
+    <label class="btn" for="barIn">${ICON_BAR}Scan barcode</label>
     <button class="btn" id="addMeal">${ICON_PLUS}Add food</button>
   </div>
   <section class="meals" aria-label="Meals">
@@ -610,8 +716,8 @@ function defaultName() { const h = new Date().getHours(); return h < 11 ? "Break
 function openEditor(id) {
   const e = id ? state.day.entries.find(x => x.id === id) : null;
   state.editor = e
-    ? { id: e.id, t: e.t, name: e.name, items: structuredClone(e.items), photo: photoCache[e.id] || null, hadPhoto: !!e.photo, photoChanged: false, aiBlob: null, notes: "", status: "", statusKind: "", query: "" }
-    : { id: null, t: null, name: defaultName(), items: [], photo: null, hadPhoto: false, photoChanged: false, aiBlob: null, notes: "", status: "", statusKind: "", query: "" };
+    ? { id: e.id, t: e.t, name: e.name, items: structuredClone(e.items), photo: photoCache[e.id] || null, hadPhoto: !!e.photo, photoChanged: false, aiBlob: null, notes: "", status: "", statusKind: "", query: "", codeDraft: "", needLabel: null, bstatus: "", bkind: "", sstatus: "", skind: "" }
+    : { id: null, t: null, name: defaultName(), items: [], photo: null, hadPhoto: false, photoChanged: false, aiBlob: null, notes: "", status: "", statusKind: "", query: "", codeDraft: "", needLabel: null, bstatus: "", bkind: "", sstatus: "", skind: "" };
   if (e?.photo && !photoCache[e.id]) backend.get("p-" + e.id).then(d => { if (d?.img && state.editor?.id === e.id) { photoCache[e.id] = d.img; state.editor.photo = d.img; renderSheet(); } }).catch(() => {});
   renderSheet();
 }
@@ -624,8 +730,8 @@ function renderSheet() {
   if (!scrim) { scrim = document.createElement("div"); scrim.className = "scrim"; document.body.appendChild(scrim); document.body.style.overflow = "hidden"; scrim.addEventListener("click", ev => { if (ev.target === scrim) closeEditor(); }); }
   const aiOk = !!state.sample;
   const t = { p: 0, c: 0, f: 0 }; E.items.forEach(i => { t.p += +i.p || 0; t.c += +i.c || 0; t.f += +i.f || 0; });
-  const q = E.query.trim().toLowerCase();
-  const res = q ? FOODS.filter(f => q.split(/\s+/).every(w => f[0].toLowerCase().includes(w))).slice(0, 8) : [];
+  const P = parseQuery(E.query), q = P.q;
+  const res = q ? searchFoods(q).slice(0, 8) : [];
   scrim.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shTitle">
     <header><h2 id="shTitle">${E.id ? "Edit meal" : "Log a meal"}</h2><button class="iconbtn" id="shClose" aria-label="Close">✕</button></header>
     <div class="field"><label for="mName">Meal</label><input id="mName" value="${esc(E.name)}"></div>
@@ -657,9 +763,21 @@ function renderSheet() {
     </div>
     <div class="search">
       <label class="flabel" for="fq">Add a food</label>
-      <input id="fq" value="${esc(E.query)}" placeholder="Search: chicken, rice, eggs, oats…" autocomplete="off">
-      ${q ? `<div class="results">${res.map(f => `<button type="button" data-food="${esc(f[0])}"><span>${esc(f[0])}</span><span>${esc(f[5])}</span></button>`).join("")}<button type="button" id="addCustom"><span>Add “${esc(E.query.trim())}” and enter macros from the label</span><span></span></button></div>` : ""}
-      <p class="small muted" style="margin:0">Changing grams rescales that food's macros. For packaged food, copy the label's numbers.</p>
+      <input id="fq" value="${esc(E.query)}" placeholder="Try “100g mango”, “2 eggs” or “6 oz chicken”" autocomplete="off">
+      ${q ? `<div class="results">${res.map((f, n) => { const a = amountFor(f, P); return `<button type="button" data-res="${n}"><span class="nm"><span>${f.mine ? '<span class="tag">Saved</span> ' : ""}${esc(f.name)}</span><small>${esc(a.label)}</small></span><span class="meta">${r1(f.p * a.g / 100)} P · ${r1(f.c * a.g / 100)} C · ${r1(f.f * a.g / 100)} F<br>${fmt(kcalOf(f.p, f.c, f.f) * a.g / 100)} kcal</span></button>`; }).join("")}
+        ${state.sample ? `<button type="button" id="askClaude"><span class="nm"><span>Look up “${esc(q)}” with Claude</span><small>For foods not in the list. Saved for next time.</small></span><span></span></button>` : ""}
+        <button type="button" id="addCustom"><span class="nm"><span>Add “${esc(q)}” and type in the macros</span><small>Use the numbers from the package label</small></span><span></span></button></div>` : ""}
+      ${E.sstatus ? `<div class="status ${E.skind}" role="status">${esc(E.sstatus)}</div>` : ""}
+      <p class="small muted" style="margin:0">Type an amount with the food to get exact macros for it. Changing grams on a food rescales its macros.</p>
+    </div>
+    <div class="bar">
+      <span class="flabel">Packaged food</span>
+      <div class="row">
+        <label class="btn" for="barIn">${ICON_BAR}Scan barcode</label>
+        <form id="codeForm" class="inline" novalidate><input id="codeIn" inputmode="numeric" autocomplete="off" placeholder="or type the number" aria-label="Barcode number" value="${esc(E.codeDraft)}"><button class="btn" type="submit">Look up</button></form>
+      </div>
+      ${E.needLabel ? `<label class="btn primary" for="labelIn">${ICON_CAM}Photo of nutrition label</label>` : ""}
+      ${E.bstatus ? `<div class="status ${E.bkind}" role="status">${esc(E.bstatus)}</div>` : ""}
     </div>
     <div class="totals"><span class="chips"><span class="p"><b>${Math.round(t.p)}</b> g P</span><span class="c"><b>${Math.round(t.c)}</b> g C</span><span class="f"><b>${Math.round(t.f)}</b> g F</span></span><span><span class="num" id="tk">${fmt(kcalOf(t.p, t.c, t.f))}</span> kcal</span></div>
     <footer>
@@ -675,12 +793,11 @@ function renderSheet() {
   $("#estBtn")?.addEventListener("click", estimate);
   $("#rmPhoto")?.addEventListener("click", () => { E.photo = null; E.aiBlob = null; E.photoChanged = true; renderSheet(); });
   $("#fq").oninput = e => { E.query = e.target.value; renderSheet(); };
-  sheet.querySelectorAll("[data-food]").forEach(b => b.onclick = () => {
-    const f = FOODS.find(x => x[0] === b.dataset.food), g = f[4];
-    E.items.push({ name: f[0], g, p: f[1] * g / 100, c: f[2] * g / 100, f: f[3] * g / 100, hint: `Serving: ${f[5]}. USDA values per 100 g: ${f[1]} P · ${f[2]} C · ${f[3]} F` });
-    E.query = ""; renderSheet();
-  });
-  $("#addCustom")?.addEventListener("click", () => { E.items.push({ name: E.query.trim(), g: 100, p: 0, c: 0, f: 0, hint: "Enter grams and macros from the nutrition label." }); E.query = ""; renderSheet(); });
+  sheet.querySelectorAll("[data-res]").forEach(b => b.onclick = () => { E.sstatus = ""; addFood(res[+b.dataset.res], P); });
+  $("#askClaude")?.addEventListener("click", () => claudeLookup(P));
+  $("#addCustom")?.addEventListener("click", () => { E.items.push({ name: q, g: P.grams || 100, p: 0, c: 0, f: 0, hint: "Enter grams and macros from the nutrition label." }); E.query = ""; renderSheet(); });
+  $("#codeIn").oninput = e => E.codeDraft = e.target.value;
+  $("#codeForm").onsubmit = e => { e.preventDefault(); lookupCode(E.codeDraft); };
   sheet.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { E.items.splice(+b.dataset.rm, 1); renderSheet(); });
   sheet.querySelectorAll(".item").forEach(row => {
     const n = +row.dataset.i, it = E.items[n];
@@ -710,6 +827,9 @@ async function saveMeal() {
   const E = state.editor; if (!E) return;
   const items = E.items.filter(i => i.name.trim() || i.p || i.c || i.f).map(i => ({ name: i.name.trim() || "Food", g: r1(i.g), p: r1(i.p), c: r1(i.c), f: r1(i.f) }));
   if (!items.length) { toast("Add at least one food."); return; }
+  let renamed = false;
+  const mf = state.myFoods.map(m => { const it = E.items.find(i => i.foodId === m.id && i.name.trim() && i.name.trim() !== m.name); if (it) { renamed = true; return { ...m, name: it.name.trim().slice(0, 80) }; } return m; });
+  if (renamed) { state.myFoods = mf; backend.set("foods", { list: mf }); }
   const id = E.id || uid();
   let t = E.t;
   if (!t) { const d = dateOf(state.dayKey), now = new Date(); d.setHours(now.getHours(), now.getMinutes()); t = d.getTime(); }
@@ -747,6 +867,189 @@ async function onPhoto(file) {
     if (state.sample && state.sampleImages && !E.items.length) estimate();
   } catch { E.status = "That photo couldn't be opened. Try a JPEG or PNG."; E.statusKind = "err"; renderSheet(); }
 }
+/* ---------- food search with amounts ---------- */
+const COUNTS = { "½": 0.5, half: 0.5, a: 1, an: 1, one: 1, two: 2, three: 3, four: 4 };
+function parseQuery(raw) {
+  let q = String(raw || "").toLowerCase().replace(/(\d),(\d)/g, "$1.$2").trim(), grams = null, mult = null;
+  const m = q.match(/(\d+(?:\.\d+)?)\s*(kg|kilograms?|g|grams?|gr|oz|ounces?|lbs?|pounds?|ml)(?![a-z])/);
+  if (m) {
+    const n = parseFloat(m[1]), u = m[2];
+    grams = /^k/.test(u) ? n * 1000 : /^(oz|ounce)/.test(u) ? n * 28.3495 : /^(lb|pound)/.test(u) ? n * 453.592 : n;
+    q = q.slice(0, m.index) + " " + q.slice(m.index + m[0].length);
+  } else {
+    const c = q.match(/^(\d+(?:\.\d+)?|½|half|an?|one|two|three|four)\s+/);
+    if (c) { mult = COUNTS[c[1]] ?? parseFloat(c[1]); q = q.slice(c[0].length); }
+  }
+  q = q.replace(/\b(of|x)\b/g, " ").replace(/\s+/g, " ").trim();
+  return { q, grams, mult };
+}
+function allFoods() {
+  return state.myFoods.map(m => ({ ...m, mine: true, words: "" }))
+    .concat(FOODS.map(f => ({ name: f[0], p: f[1], c: f[2], f: f[3], sg: f[4], sl: f[5], words: f[6] || "" })));
+}
+function searchFoods(q) {
+  const ws = q.split(" ").filter(Boolean).map(w => w.length > 3 ? w.replace(/(es|s)$/, "") : w);
+  return allFoods().map(f => {
+    const name = f.name.toLowerCase(), hay = name + " " + f.words.toLowerCase() + " " + String(f.sl || "").toLowerCase();
+    if (!ws.every(w => hay.includes(w))) return null;
+    let s = name.startsWith(ws[0]) ? 0 : name.split(/[\s,]+/).some(t => t.startsWith(ws[0])) ? 1 : 2;
+    if (f.mine) s -= 0.5;
+    return [s + name.length / 200, f];
+  }).filter(Boolean).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+}
+function amountFor(f, P) {
+  if (P.grams != null) return { g: P.grams, label: `${r1(P.grams)} g` };
+  if (P.mult) return { g: P.mult * f.sg, label: `${P.mult} × ${f.sl} (${r1(P.mult * f.sg)} g)` };
+  return { g: f.sg, label: `${f.sl} (${r1(f.sg)} g)` };
+}
+const SRC = { label: "From the nutrition label", off: "From Open Food Facts", claude: "Claude lookup, USDA-based" };
+function addFood(f, P) {
+  const E = state.editor; if (!E || !f) return;
+  const a = amountFor(f, P || {});
+  E.items.push({ name: f.name, g: a.g, p: f.p * a.g / 100, c: f.c * a.g / 100, f: f.f * a.g / 100, foodId: f.mine || f.id ? f.id : null,
+    hint: `${SRC[f.src] || "USDA"} · per 100 g: ${r1(f.p)} P · ${r1(f.c)} C · ${r1(f.f)} F · serving ${f.sl} (${r1(f.sg)} g)` });
+  E.query = ""; renderSheet();
+}
+function saveMyFood(food) {
+  const list = state.myFoods.filter(x => x.id !== food.id && !(food.code && x.code === food.code));
+  list.unshift(food); state.myFoods = list.slice(0, 400);
+  backend.set("foods", { list: state.myFoods });
+}
+async function claudeLookup(P) {
+  const E = state.editor; if (!E || !state.sample) return;
+  E.sstatus = `Looking up “${P.q}”…`; E.skind = "busy"; renderSheet();
+  try {
+    const out = await state.sample.json(`Give the USDA FoodData Central nutrition values for this food: """${P.q.slice(0, 120)}""".
+Reply with JSON only:
+{"name":"clear food name, saying raw or cooked where it matters","per100":{"protein":0,"carbs":0,"fat":0},"serving_grams":0,"serving_label":"a typical serving, e.g. 1 cup","known":true}
+Values are grams per 100 g of the food as it is usually eaten. Use total carbohydrate. If this isn't a recognizable food, set known to false.`, { modelTier: "default" });
+    if (state.editor !== E) return;
+    const v = out?.per100;
+    if (!out || out.known === false || !v) { E.sstatus = `“${P.q}” wasn't recognized. Try a more common name, or type in the macros.`; E.skind = "err"; renderSheet(); return; }
+    const sg = +out.serving_grams > 0 ? +out.serving_grams : 100;
+    const food = { id: uid(), name: String(out.name || P.q).slice(0, 80), p: r1(Math.max(0, +v.protein || 0)), c: r1(Math.max(0, +v.carbs || 0)), f: r1(Math.max(0, +v.fat || 0)), sg, sl: String(out.serving_label || `${sg} g`).slice(0, 60), src: "claude" };
+    saveMyFood(food); E.sstatus = `Added ${food.name}. Saved to your foods for next time.`; E.skind = "";
+    addFood({ ...food, mine: true }, P);
+  } catch (e) {
+    if (state.editor !== E) return;
+    E.sstatus = ERR[e?.code] || "The lookup didn't come back. Try again, or type in the macros."; E.skind = "err"; renderSheet();
+  }
+}
+
+/* ---------- barcodes ---------- */
+const normCode = raw => { const d = String(raw || "").replace(/\D/g, ""); return d.length === 12 ? "0" + d : d; };
+let zxP = null;
+function loadZX() {
+  return zxP ||= new Promise((res, rej) => {
+    if (window.ZXing) return res(window.ZXing);
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js";
+    s.onload = () => window.ZXing ? res(window.ZXing) : rej(new Error("load"));
+    s.onerror = () => { zxP = null; rej(new Error("load")); };
+    document.head.appendChild(s);
+  });
+}
+function rotate90(c) {
+  const r = document.createElement("canvas"); r.width = c.height; r.height = c.width;
+  const g = r.getContext("2d"); g.translate(r.width, 0); g.rotate(Math.PI / 2); g.drawImage(c, 0, 0); return r;
+}
+async function decodeBarcode(img) {
+  if ("BarcodeDetector" in window) {
+    try { const d = new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"] }); const r = await d.detect(img); if (r[0]?.rawValue) return r[0].rawValue; } catch {}
+  }
+  const Z = await loadZX();
+  const hints = new Map();
+  hints.set(Z.DecodeHintType.TRY_HARDER, true);
+  hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E, Z.BarcodeFormat.CODE_128]);
+  const reader = new Z.MultiFormatReader(); reader.setHints(hints);
+  for (const size of [1400, 900, 2400]) {
+    const base = scaled(img, size);
+    for (const cv of [base, rotate90(base)]) {
+      try { return reader.decode(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(cv)))).getText(); } catch {}
+    }
+  }
+  return null;
+}
+async function fetchOFF(code) {
+  try {
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 6000);
+    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,brands,nutriments,serving_size,serving_quantity`, { signal: ctl.signal });
+    clearTimeout(timer);
+    if (!r.ok) return null;
+    const pr = (await r.json())?.product, n = pr?.nutriments;
+    if (!n || (n.proteins_100g == null && n.carbohydrates_100g == null && n.fat_100g == null)) return null;
+    const sg = +pr.serving_quantity > 0 ? +pr.serving_quantity : 100;
+    const name = [String(pr.brands || "").split(",")[0], pr.product_name].filter(Boolean).join(" ").trim() || `Product ${code}`;
+    return { id: uid(), code, name: name.slice(0, 80), p: r1(+n.proteins_100g || 0), c: r1(+n.carbohydrates_100g || 0), f: r1(+n.fat_100g || 0), sg, sl: String(pr.serving_size || `${sg} g`).slice(0, 60), src: "off" };
+  } catch { return null; }
+}
+async function lookupCode(raw) {
+  const E = state.editor; if (!E) return;
+  const code = normCode(raw); E.codeDraft = code;
+  if (code.length < 8 || code.length > 14) { E.bstatus = "A barcode number has 8 to 13 digits. Check the number under the bars."; E.bkind = "err"; E.needLabel = null; renderSheet(); return; }
+  E.needLabel = null;
+  const saved = state.myFoods.find(x => x.code === code);
+  if (saved) { E.bstatus = `Found “${saved.name}” in your saved foods. Added 1 serving; change the grams to match what you had.`; E.bkind = ""; addFood({ ...saved, mine: true }, {}); return; }
+  E.bstatus = `Looking up ${code}…`; E.bkind = "busy"; renderSheet();
+  const off = await fetchOFF(code);
+  if (state.editor !== E) return;
+  if (off) {
+    saveMyFood(off);
+    E.bstatus = `Found “${off.name}”. Added 1 serving (${off.sl}). Check it against the package.`; E.bkind = "";
+    addFood({ ...off, mine: true }, {}); return;
+  }
+  if (state.sample && state.sampleImages) {
+    E.needLabel = code;
+    E.bstatus = `Barcode ${code} isn't saved yet. Take a photo of the nutrition facts label and Claude will read it. After that, scanning this barcode fills in the macros right away.`;
+  } else E.bstatus = `Barcode ${code} wasn't found. Add the food above and type in the numbers from its label.`;
+  E.bkind = ""; renderSheet();
+}
+async function onBarcodePhoto(file) {
+  if (!file) return;
+  if (!state.editor) openEditor(null);
+  const E = state.editor;
+  E.bstatus = "Reading barcode…"; E.bkind = "busy"; E.needLabel = null; renderSheet();
+  try {
+    const img = await loadImage(file);
+    const code = await decodeBarcode(img);
+    if (state.editor !== E) return;
+    if (!code) { E.bstatus = "No barcode found in that photo. Fill the frame with the barcode, hold steady in good light and try again, or type the number."; E.bkind = "err"; renderSheet(); return; }
+    await lookupCode(code);
+  } catch {
+    if (state.editor !== E) return;
+    E.bstatus = "The barcode reader couldn't load. Check your connection, or type the number."; E.bkind = "err"; renderSheet();
+  }
+}
+async function onLabelPhoto(file) {
+  const E = state.editor; if (!file || !E || !state.sample) return;
+  const code = E.needLabel;
+  E.bstatus = "Reading the nutrition label…"; E.bkind = "busy"; renderSheet();
+  try {
+    const img = await loadImage(file);
+    const blob = await new Promise(r => scaled(img, 1600).toBlob(r, "image/jpeg", 0.88));
+    const out = await state.sample.json(`Read this food package's nutrition facts label exactly as printed. Copy the numbers from the label; do not estimate them or use outside knowledge.
+Reply with JSON only:
+{"name":"product name if visible on the package, otherwise null","serving_label":"serving size as printed, e.g. 2/3 cup (55g)","serving_grams":55,"protein":10,"carbs":20,"fat":5,"per100":{"protein":null,"carbs":null,"fat":null},"readable":true}
+protein, carbs and fat are grams per serving; use Total Carbohydrate, not net carbs. If the label also has a per 100 g column, fill per100, otherwise leave nulls. If the serving size is only in ml, give the ml as serving_grams. If the label can't be read, set readable to false.`, { images: [blob], modelTier: "default" });
+    if (state.editor !== E) return;
+    if (!out || out.readable === false) { E.bstatus = "The label couldn't be read. Take a sharper photo, straight on, with the whole panel in frame."; E.bkind = "err"; renderSheet(); return; }
+    const sg = +out.serving_grams, v = out.per100;
+    let p, c, f;
+    if (v && v.protein != null && v.carbs != null && v.fat != null) { p = +v.protein; c = +v.carbs; f = +v.fat; }
+    else if (sg > 0) { p = (+out.protein || 0) * 100 / sg; c = (+out.carbs || 0) * 100 / sg; f = (+out.fat || 0) * 100 / sg; }
+    else { E.bstatus = "The label doesn't give the serving size in grams. Add the food above and type in its numbers."; E.bkind = "err"; renderSheet(); return; }
+    const food = { id: uid(), code: code || null, name: String(out.name || (code ? `Product ${code}` : "Packaged food")).slice(0, 80), p: r1(p), c: r1(c), f: r1(f), sg: sg > 0 ? sg : 100, sl: String(out.serving_label || `${sg} g`).slice(0, 60), src: "label" };
+    saveMyFood(food); E.needLabel = null;
+    E.bstatus = `Label read: ${food.sl} has ${r1(food.p * food.sg / 100)} g protein, ${r1(food.c * food.sg / 100)} g carbs, ${r1(food.f * food.sg / 100)} g fat. Saved${code ? " for the next time you scan it" : ""}. Rename it below if you like.`; E.bkind = "";
+    addFood({ ...food, mine: true }, {});
+  } catch (e) {
+    if (state.editor !== E) return;
+    E.bstatus = ERR[e?.code] || "The label couldn't be read. Try again."; E.bkind = "err"; renderSheet();
+  }
+}
+$("#barIn").addEventListener("change", e => { const f = e.target.files?.[0]; e.target.value = ""; onBarcodePhoto(f); });
+$("#labelIn").addEventListener("change", e => { const f = e.target.files?.[0]; e.target.value = ""; onLabelPhoto(f); });
+
 ["#camIn", "#libIn"].forEach(s => $(s).addEventListener("change", e => { const f = e.target.files?.[0]; e.target.value = ""; pendingQuick = false; onPhoto(f); }));
 
 const ERR = {
